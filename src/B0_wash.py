@@ -155,6 +155,13 @@ COLUMNS = [
     "池体积2(8114) m3",
     "池体积3(8115) m3",
     "全烃(8219) %",
+    "甲烷(8212) %",
+    "乙烷(8213) %",
+    "丙烷(8214) %",
+    "正丁烷(8215) %",
+    "异丁烷(8216) %",
+    "正戊烷(8217) %",
+    "异戊烷(8218) %",
 ]
 
 
@@ -162,7 +169,7 @@ COLUMNS = [
 WELL_WINDOW_SECONDS = 1800  # 30分钟窗口
 
 # 正样本滑动步长
-POS_STRIDE_SECONDS = 300  # 5分钟
+POS_STRIDE_SECONDS = 300
 
 NEG_NUM = 10  # 每口井负样本数量
 
@@ -435,14 +442,17 @@ def build_one_row_features(df, has_label=True) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    # for folder in Path(r"D:\.datasets\oil_data\train").iterdir():
-    #     if not folder.is_dir():
-    #         continue
 
-    #     print(folder.name)
-    #     data = concat_dataset(folder)
-    #     metrics = read_metrics(folder)
-    #     generate_pos_neg_samples(folder.stem, data, metrics)
+    if input('是否根据数据集重新生成正负样本csv文件? (y/n)') == 'y':
+
+        for folder in Path(r"D:\.datasets\oil_data\train").iterdir():
+            if not folder.is_dir():
+                continue
+
+            print(folder.name)
+            data = concat_dataset(folder)
+            metrics = read_metrics(folder)
+            generate_pos_neg_samples(folder.stem, data, metrics)
 
     df_list = []
     for f in Path("./dataset/samples_v3").glob("*.csv"):
@@ -460,5 +470,5 @@ if __name__ == "__main__":
     # 取出开头到末尾第10行
     df_middle = df.iloc[:-10]
     # 分别写入csv文件
-    df_last.to_csv("./train_v3.csv")
-    df_middle.to_csv("./test_v3.csv")
+    df_last.to_csv("./test_v3.csv")
+    df_middle.to_csv("./train_v3.csv")
