@@ -1,0 +1,18 @@
+dataset/
+models/
+*.csv
+*.zip
+*.pickle
+*.pkl
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.vscode

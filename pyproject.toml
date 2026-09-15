@@ -1,0 +1,25 @@
+[project]
+name = "overflow"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "air", email = "doyijian@163.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "lightgbm>=4.7.0",
+    "numpy>=2.5.3",
+    "openpyxl>=3.1.5",
+    "pandas>=3.0.5",
+    "scikit-learn>=1.9.1",
+    "tqdm>=4.70.1",
+    "xlrd>=2.0.2",
+]
+
+[project.scripts]
+overflow = "overflow:main"
+
+[build-system]
+requires = ["uv_build>=0.12.1,<0.13.0"]
+build-backend = "uv_build"
