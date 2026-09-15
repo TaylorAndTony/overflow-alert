@@ -143,10 +143,17 @@ F指数(8043)
 INVALID_VALUES = [-999.25, -999, -9999, -9999.0]
 
 COLUMNS = [
+    "井深(8004) m",
+    "钻头位置(8005) m",
+    "钻压(8011) kN",
+    "扭矩(8013) kN.m",
+    "大钳扭矩(8030) kN.m",
+    "出口温度(8107) degC",
+    "出口电导(8109) s/m",
+    "总池体积(8112) m3",
     "池体积1(8113) m3",
     "池体积2(8114) m3",
-    "硫化氢1(8207) ppm",
-    "泥浆溢流(8136) m3",
+    "池体积3(8115) m3",
     "全烃(8219) %",
 ]
 
@@ -209,12 +216,18 @@ def read_metrics(well_folder):
     return pd.read_excel(file)
 
 
-def remove_invalid_values(df) -> pd.DataFrame:
-    # 去除无效值
-    print("去除无效值")
-    df.replace(INVALID_VALUES, np.nan, inplace=True)
-    # 前向插值
-    df.ffill()
+def remove_invalid_values(df):
+
+    df = df.copy()
+
+    invalid = [-999.25, -9999]
+
+    for col in df.columns:
+        if col in COLUMNS:
+            df[col + "_missing"] = df[col].isin(invalid).astype(int)
+
+    df.replace(invalid, np.nan, inplace=True)
+
     return df
 
 
@@ -254,7 +267,7 @@ def generate_pos_neg_samples(
 
         window_data = window_data.copy()
 
-        window_data['label'] = 1
+        window_data["label"] = 1
 
         if len(window_data) > 0:
             samples.append(
@@ -270,7 +283,6 @@ def generate_pos_neg_samples(
         t_right -= stride
 
     for i, sample in enumerate(samples):
-
         sample["data"].to_csv(write_to / f"{well_name}_pos_{i}.csv", index=False)
         print("保存正样本", i)
 
@@ -281,10 +293,9 @@ def generate_pos_neg_samples(
 
     # 窗口左边界不能早于这个时间
     # 计算这个窗口滑动时使用的 stride，基于给定的数量计算步幅
-    neg_window_slide_stride =  (t_overflow - the_most_left) / NEG_NUM
+    neg_window_slide_stride = (t_overflow - the_most_left) / NEG_NUM
 
     for i in range(NEG_NUM):
-
         t_left = the_most_left + i * neg_window_slide_stride
         t_right = t_left + window
         t_right = min(t_right, t_overflow)
@@ -295,7 +306,7 @@ def generate_pos_neg_samples(
         ]
         window_data = window_data.copy()
 
-        window_data['label'] = 0
+        window_data["label"] = 0
 
         if len(window_data) > 0:
             samples.append(
@@ -310,19 +321,20 @@ def generate_pos_neg_samples(
             print("保存负样本", i)
 
 
-def build_feature_dataset(df) -> pd.DataFrame:
+def build_feature_dataset(df, has_label=True) -> pd.DataFrame:
 
     df = remove_invalid_values(df)
 
     # 对于 df，只保留其包含在 COLUMNS 中的列
     col = COLUMNS[:]
-    col.append('label')
+    if has_label:  # 训练集
+        col.append("label")
     df = df[col]
 
     print("构建特征数据集")
 
     for col in COLUMNS:
-        if col == 'label':
+        if col == "label":
             continue
         # 计算窗口内的均值（平滑高频噪声）
         df[f"{col}_ma_{SAMPLE_WINDOW_SIZE}"] = (
@@ -373,14 +385,15 @@ def calc_slope(series):
     return np.polyfit(x, y, 1)[0]
 
 
-def build_one_row_features(df) -> pd.DataFrame:
+def build_one_row_features(df, has_label=True) -> pd.DataFrame:
     """
     把一个多行经过 build_feature_dataset 处理的 DataFrame 转换为单行特征
     """
     features = {}
-    features['label'] = df['label'].iloc[0]
+    if has_label:
+        features["label"] = df["label"].iloc[0]
     for col in df.columns:
-        if col == 'label':
+        if col == "label":
             continue
         x = df[col].astype(float)
 
@@ -422,7 +435,6 @@ def build_one_row_features(df) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-
     # for folder in Path(r"D:\.datasets\oil_data\train").iterdir():
     #     if not folder.is_dir():
     #         continue
@@ -433,8 +445,8 @@ if __name__ == "__main__":
     #     generate_pos_neg_samples(folder.stem, data, metrics)
 
     df_list = []
-    for f in Path('./dataset/samples_v3').glob('*.csv'):
-        print(f'为 {f.name} 生成特征')
+    for f in Path("./dataset/samples_v3").glob("*.csv"):
+        print(f"为 {f.name} 生成特征")
         df = pd.read_csv(f)
         df = build_feature_dataset(df)
         df = build_one_row_features(df)
@@ -442,4 +454,11 @@ if __name__ == "__main__":
 
     # merge all samples to one big dataset
     df = pd.concat(df_list)
-    df.to_csv('./samples_v3.csv')
+    # df.to_csv("./train_v3.csv")
+    # 取出df的末尾10行
+    df_last = df.tail(10)
+    # 取出开头到末尾第10行
+    df_middle = df.iloc[:-10]
+    # 分别写入csv文件
+    df_last.to_csv("./train_v3.csv")
+    df_middle.to_csv("./test_v3.csv")
