@@ -60,7 +60,11 @@ def main():
 
         # print(prob)
 
-        y_pred = model.predict(df)
+        prob = model.predict_proba(df)[:, 1]
+
+        threshold = 0.7
+
+        y_pred = (prob > threshold).astype(int)
 
         print(type(y_pred))  # <class 'numpy.ndarray'>
 

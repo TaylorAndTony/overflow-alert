@@ -149,6 +149,7 @@ COLUMNS = [
     "扭矩(8013) kN.m",
     "大钳扭矩(8030) kN.m",
     "出口温度(8107) degC",
+    "出口流量(百分)(8137) %",
     "出口电导(8109) s/m",
     "总池体积(8112) m3",
     "池体积1(8113) m3",
@@ -166,15 +167,15 @@ COLUMNS = [
 EPSILON = 1e-12
 
 # 预处理单井超大 csv 时，滑动窗口大小
-WELL_WINDOW_SECONDS = 1800  # 30分钟窗口
+WELL_WINDOW_SECONDS = 900  # 30分钟窗口
 
 # 正样本滑动步长
-POS_STRIDE_SECONDS = 300
+POS_STRIDE_SECONDS = 150
 
-NEG_NUM = 10  # 每口井负样本数量
+NEG_NUM = 15  # 每口井负样本数量
 
 # 处理正负样本时，设定滑动窗口大小，例如 60 秒（假设 1s 采样频率）
-SAMPLE_WINDOW_SIZE = 60
+SAMPLE_WINDOW_SIZE = 30
 
 # =========================
 # concat
@@ -368,6 +369,11 @@ def build_feature_dataset(df, has_label=True) -> pd.DataFrame:
         # 二阶差分：当前值与前两秒的差值，捕捉瞬间突变
         feature_dict[f"{col}_diff_2"] = df[col].diff(periods=2)
 
+        feature_dict[f"{col}_diff_30"] = df[col].diff(30)
+        feature_dict[f"{col}_diff_60"] = df[col].diff(60)
+        feature_dict[f"{col}_diff_120"] = df[col].diff(120)
+        feature_dict[f"{col}_acc"] = df[col].diff()
+
         # 环比增长率：当前值相对于上一秒的变化率
         feature_dict[f"{col}_growth_rate"] = (df[col] - df[col].shift(1)) / (
             df[col].shift(1) + EPSILON
@@ -399,6 +405,9 @@ def calc_slope(series):
 
     return np.polyfit(x, y, 1)[0]
 
+
+def calc_level2_slope(series):
+    return np.polyfit(series.index, series.values, 2)[0]
 
 def build_one_row_features(df, has_label=True) -> pd.DataFrame:
     """
@@ -445,6 +454,7 @@ def build_one_row_features(df, has_label=True) -> pd.DataFrame:
         # 趋势
 
         features[f"{col}_slope"] = calc_slope(x)
+        features[f"{col}_slope2"] = calc_level2_slope(x)
 
     return pd.DataFrame([features])
 
