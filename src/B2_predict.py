@@ -31,12 +31,11 @@ feature_names = joblib.load("models/v3_features.pkl")
 OUTPUT = Path("result.csv")
 
 
-if __name__ == "__main__":
+def main():
     string = "切片ID,溢流判断\n"
     for csv in TEST_DIR.glob("*.csv"):
         print(f"读取文件：{csv.name}")
         df = pd.read_csv(csv)
-
 
         df = B0_wash.build_feature_dataset(df, False)
         df = B0_wash.build_one_row_features(df, False)
@@ -71,3 +70,7 @@ if __name__ == "__main__":
         f.write(string)
 
     print("完成")
+
+
+if __name__ == "__main__":
+    main()

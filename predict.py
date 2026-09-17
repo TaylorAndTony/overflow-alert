@@ -1,28 +1,30 @@
 from argparse import ArgumentParser
 from pathlib import Path
-import random
+
+import numpy as np
+
+from src import B2_predict
+
 # python predict.py --data_dir ./data --output ./result.csv
+
+# 脚本开头
+np.seterr(invalid="ignore")
 
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument('--data_dir', type=str, default=r'D:\.datasets\oil_data\test\data')
-    parser.add_argument('--output', type=str, default='./result.csv')
+    parser.add_argument(
+        "--data_dir", type=str, default=r"D:\.datasets\oil_data\test\data"
+    )
+    parser.add_argument("--output", type=str, default="./result.csv")
 
     args = parser.parse_args()
     print(args.data_dir)
     print(args.output)
-    with open(args.output, 'w', encoding='utf-8') as f:
-        f.write('序号,切片ID,溢流判断\n')
-        idx=1
-        for file in Path(args.data_dir).glob('*.csv'):
-            print(file.name)
-            # r =random.randint(0,1)
-            r = 0
-            f.write(f'{idx},{file.stem},{r}\n')
-            idx+=1
+    B2_predict.TEST_DIR = Path(args.data_dir)
+    B2_predict.OUTPUT = Path(args.output)
+    B2_predict.main()
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

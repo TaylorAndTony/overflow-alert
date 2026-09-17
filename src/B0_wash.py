@@ -163,7 +163,7 @@ COLUMNS = [
     "正戊烷(8217) %",
     "异戊烷(8218) %",
 ]
-
+EPSILON = 1e-12
 
 # 预处理单井超大 csv 时，滑动窗口大小
 WELL_WINDOW_SECONDS = 1800  # 30分钟窗口
@@ -340,41 +340,49 @@ def build_feature_dataset(df, has_label=True) -> pd.DataFrame:
 
     print("构建特征数据集")
 
+    # 缓存所有新增特征列
+    feature_dict = {}
+
     for col in COLUMNS:
         if col == "label":
             continue
+
         # 计算窗口内的均值（平滑高频噪声）
-        df[f"{col}_ma_{SAMPLE_WINDOW_SIZE}"] = (
+        feature_dict[f"{col}_ma_{SAMPLE_WINDOW_SIZE}"] = (
             df[col].rolling(window=SAMPLE_WINDOW_SIZE, min_periods=1).mean()
         )
 
         # 计算窗口内的标准差（捕捉溢流前的剧烈波动）
-        df[f"{col}_std_{SAMPLE_WINDOW_SIZE}"] = (
+        feature_dict[f"{col}_std_{SAMPLE_WINDOW_SIZE}"] = (
             df[col].rolling(window=SAMPLE_WINDOW_SIZE, min_periods=1).std()
         )
 
         # 计算窗口内的最大值（捕捉压力突升极值）
-        df[f"{col}_max_{SAMPLE_WINDOW_SIZE}"] = (
+        feature_dict[f"{col}_max_{SAMPLE_WINDOW_SIZE}"] = (
             df[col].rolling(window=SAMPLE_WINDOW_SIZE, min_periods=1).max()
         )
 
-    # 4. 使用 shift 提取时序趋势与突变特征
-    for col in COLUMNS:
         # 一阶差分：当前值与上一秒的差值，捕捉瞬间突变
-        df[f"{col}_diff_1"] = df[col].diff(periods=1)
+        feature_dict[f"{col}_diff_1"] = df[col].diff(periods=1)
+
+        # 二阶差分：当前值与前两秒的差值，捕捉瞬间突变
+        feature_dict[f"{col}_diff_2"] = df[col].diff(periods=2)
 
         # 环比增长率：当前值相对于上一秒的变化率
-        # 使用 shift(1) 获取上一时刻的值，并处理除零错误
-        df[f"{col}_growth_rate"] = (df[col] - df[col].shift(1)) / df[col].shift(1)
+        feature_dict[f"{col}_growth_rate"] = (df[col] - df[col].shift(1)) / (
+            df[col].shift(1) + EPSILON
+        )
 
         # 结合 rolling 和 shift：计算当前窗口均值与上一窗口均值的差值
-        # 这能反映一段时间内的整体趋势走向，比单点差分更稳健
         ma_col = f"{col}_ma_{SAMPLE_WINDOW_SIZE}"
-        df[f"{col}_ma_trend"] = df[ma_col] - df[ma_col].shift(1)
+        feature_dict[f"{col}_ma_trend"] = feature_dict[ma_col] - feature_dict[
+            ma_col
+        ].shift(1)
 
-    # 5. 处理生成的缺失值 (NaN)
-    # rolling 和 shift 操作会在序列开头产生 NaN，对于时序特征工程，通常使用前向填充或填 0
+    # 一次性将所有特征列拼接到 df 上
+    df = pd.concat([df, pd.DataFrame(feature_dict, index=df.index)], axis=1)
 
+    # 处理生成的缺失值 (NaN)
     df.fillna(0, inplace=True)
 
     return df
@@ -442,9 +450,7 @@ def build_one_row_features(df, has_label=True) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-
-    if input('是否根据数据集重新生成正负样本csv文件? (y/n)') == 'y':
-
+    if input("是否根据数据集重新生成正负样本csv文件? (y/n)") == "y":
         for folder in Path(r"D:\.datasets\oil_data\train").iterdir():
             if not folder.is_dir():
                 continue
