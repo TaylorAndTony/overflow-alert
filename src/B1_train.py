@@ -61,13 +61,17 @@ def main():
     x_train = clean_feature_names(x_train)
     x_test = clean_feature_names(x_test)
 
-    # 5. 初始化模型
     model = LGBMClassifier(
-        n_estimators=100,
-        learning_rate=0.05,
-        num_leaves=8,
-        max_depth=3,
-        class_weight={0: 1, 1: 10},
+        n_estimators=200,
+        learning_rate=0.03,
+        num_leaves=4,
+        max_depth=2,
+        min_child_samples=20,
+        subsample=0.8,
+        colsample_bytree=0.5,
+        reg_alpha=5,
+        reg_lambda=10,
+        class_weight={0: 1, 1: 3},
         random_state=42,
     )
 

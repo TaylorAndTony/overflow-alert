@@ -49,4 +49,4 @@ if __name__ == '__main__':
     with zipfile.ZipFile("result.zip", "w") as myzip:
         myzip.write("result.csv")
 
-    zip_current_dir("submission_code.zip", ["dataset", ".vscode", ".venv"], ['result.zip'])
+    zip_current_dir("submission_code.zip", ["dataset", ".vscode", ".venv"], ['result.zip', 'train_v3.csv', 'test_v3.csv'])
