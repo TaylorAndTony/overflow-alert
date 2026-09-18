@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from tqdm import tqdm
+import re
 
 
 TRAIN_DIR = Path(r"D:\.datasets\oil_data\train")
@@ -147,9 +148,9 @@ INVALID_VALUES = [-999.25, -999, -9999, -9999.0]
 COLUMNS = [
     "井深(8004) m",
     "钻头位置(8005) m",
-    # "钻压(8011) kN",
-    # "扭矩(8013) kN.m",
-    # "大钳扭矩(8030) kN.m",
+    "钻压(8011) kN",
+    "扭矩(8013) kN.m",
+    "大钳扭矩(8030) kN.m",
     "出口温度(8107) degC",
     "出口流量(百分)(8137) %",
     "出口电导(8109) s/m",
@@ -169,19 +170,31 @@ COLUMNS = [
 EPSILON = 1e-12
 
 # 预处理单井超大 csv 时，滑动窗口大小
-WELL_WINDOW_SECONDS = 900  # 30分钟窗口
+WELL_WINDOW_SECONDS = 1800  # 30分钟窗口
 
 # 正样本滑动步长
-POS_STRIDE_SECONDS = 150
+POS_STRIDE_SECONDS = 300
 
 NEG_NUM = 15  # 每口井负样本数量
 
 # 处理正负样本时，设定滑动窗口大小，例如 60 秒（假设 1s 采样频率）
-SAMPLE_WINDOW_SIZE = 30
+SAMPLE_WINDOW_SIZE = 60
+
+TEST_WELL = "WELL_000002"
+
+WELL_REGEX = re.compile(r"WELL_\d+")
 
 # =========================
 # concat
 # =========================
+
+
+def ask_bool(prompt: str) -> bool:
+    while True:
+        answer = input(prompt)
+        if answer.lower() in ["y", "n"]:
+            return answer.lower() == "y"
+        print("请输入 y 或 n")
 
 
 def read_excel_all_sheets(path):
@@ -297,6 +310,8 @@ def generate_pos_neg_samples(
 
         window_data["label"] = 1
 
+        window_data["well_name"] = WELL_REGEX.match(well_name).group()
+
         if len(window_data) > 0:
             samples.append(
                 {
@@ -335,16 +350,9 @@ def generate_pos_neg_samples(
         window_data = window_data.copy()
 
         window_data["label"] = 0
+        window_data["well_name"] = WELL_REGEX.match(well_name).group()
 
         if len(window_data) > 0:
-            samples.append(
-                {
-                    "t_left": t_left,
-                    "t_right": t_right,
-                    "data": window_data,
-                    "label": 0,  # 负样本
-                }
-            )
             window_data.to_csv(write_to / f"{well_name}_neg_{i}.csv", index=False)
             print("保存负样本", i)
 
@@ -356,6 +364,7 @@ def build_feature_dataset(df, has_label=True) -> pd.DataFrame:
     # 对于 df，只保留其包含在 COLUMNS 中的列
     col = COLUMNS[:]
     if has_label:  # 训练集
+        col.append("well_name")
         col.append("label")
     df = df[col]
 
@@ -365,7 +374,7 @@ def build_feature_dataset(df, has_label=True) -> pd.DataFrame:
     feature_dict = {}
 
     for col in COLUMNS:
-        if col == "label":
+        if col == "label" or col == "well_name":
             continue
 
         # 计算窗口内的均值（平滑高频噪声）
@@ -453,10 +462,12 @@ def build_one_row_features(df, has_label=True) -> pd.DataFrame:
     把一个多行经过 build_feature_dataset 处理的 DataFrame 转换为单行特征
     """
     features = {}
+
     if has_label:
+        features["well_name"] = df["well_name"].iloc[0]
         features["label"] = df["label"].iloc[0]
     for col in df.columns:
-        if col == "label":
+        if col == "label" or col == "well_name":
             continue
         x = df[col].astype(float)
 
@@ -524,7 +535,7 @@ def build_one_row_features(df, has_label=True) -> pd.DataFrame:
         # 趋势
 
         features[f"{col}_slope"] = calc_slope(x)
-        features[f"{col}_slope2"] = calc_level2_slope(x)
+        # features[f"{col}_slope2"] = calc_level2_slope(x)
         diff = x.diff()
 
         features[f"{col}_diff_max"] = diff.max()
@@ -562,7 +573,12 @@ def build_one_row_features(df, has_label=True) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    if input("是否生成正负样本 csv 文件? 初次运行请输入 y (y/n) ") == "y":
+    if ask_bool("是否生成正负样本 csv 文件? 初次运行请输入 y (y/n) "):
+        for file in Path('./dataset/samples_v3').iterdir():
+            if file.is_dir():
+                continue
+            file.unlink()
+
         for folder in TRAIN_DIR.iterdir():
             if not folder.is_dir():
                 continue
@@ -586,9 +602,16 @@ if __name__ == "__main__":
     df = pd.concat(df_list)
     # df.to_csv("./train_v3.csv")
     # 取出df的末尾10行
-    df_last = df.tail(10)
-    # 取出开头到末尾第10行
-    df_middle = df.iloc[:-10]
-    # 分别写入csv文件
-    df_last.to_csv("./test_v3.csv")
-    df_middle.to_csv("./train_v3.csv")
+    # df_last = df.tail(10)
+    # # 取出开头到末尾第10行
+    # df_middle = df.iloc[:-10]
+    # # 分别写入csv文件
+    # df_last.to_csv("./test_v3.csv")
+    # df_middle.to_csv("./train_v3.csv")
+
+    # 利用 well_name 字段，把训练集和测试集分开。测试集：只等于 TEST_WELL 的数据，其余为训练集
+    df_train = df[df["well_name"] != TEST_WELL]
+    df_test = df[df["well_name"] == TEST_WELL]
+    # save to csv
+    df_train.to_csv("./train_v3.csv")
+    df_test.to_csv("./test_v3.csv")

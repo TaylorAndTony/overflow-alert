@@ -52,11 +52,11 @@ def main():
 
     # 3. 提取特征 X
     # 直接排除 id 列和 label 列，避免重复删除报错，同时确保 X 中不包含非数值特征
-    x_train = df.drop(columns=["label"])
+    x_train = df.drop(columns=["label", "well_name"])
 
     y_test = df2["label"]
 
-    x_test = df2.drop(columns=["label"])
+    x_test = df2.drop(columns=["label", "well_name"])
 
     x_train = clean_feature_names(x_train)
     x_test = clean_feature_names(x_test)

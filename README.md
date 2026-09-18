@@ -134,8 +134,9 @@ data 文件夹与竞赛下发数据集内的 test\data 完全一致，是 csv �
 ### 随后在此项目目录下，依次运行：
 
 1. `python src/B0_wash.py`
-2. `python src/B1_train.py`
-3. `python src/B2_predict.py`
+2. 脚本提示 `是否生成正负样本 csv 文件? 初次运行请输入 y (y/n) ` 请输入 y
+3. `python src/B1_train.py`
+4. `python src/B2_predict.py`
 
 即可完成训练+预测。
 
