@@ -7,6 +7,8 @@ import pandas as pd
 from tqdm import tqdm
 
 
+TRAIN_DIR = Path(r"D:\.datasets\oil_data\train")
+
 # =========================
 # 参数
 # =========================
@@ -182,11 +184,29 @@ SAMPLE_WINDOW_SIZE = 30
 # =========================
 
 
+def read_excel_all_sheets(path):
+
+    # 读取全部sheet
+    sheets = pd.read_excel(path, sheet_name=None)
+
+    print("    已读取", len(sheets), "个sheet")
+
+    # 合并
+    df = pd.concat(sheets.values(), ignore_index=True)
+
+    # 日期排序
+    df["时间"] = pd.to_datetime(df["时间"])
+
+    df = df.sort_values(by="时间").reset_index(drop=True)
+
+    return df
+
+
 def concat_excel(paths: list[Path]):
     dfs = []
     for p in paths:
         print("  合并表格，读取", p.name)
-        dfs.append(pd.read_excel(p))
+        dfs.append(read_excel_all_sheets(p))
     return pd.concat(dfs, ignore_index=True)
 
 
@@ -339,7 +359,7 @@ def build_feature_dataset(df, has_label=True) -> pd.DataFrame:
         col.append("label")
     df = df[col]
 
-    print("构建特征数据集")
+    # print("构建特征数据集")
 
     # 缓存所有新增特征列
     feature_dict = {}
@@ -396,6 +416,9 @@ def build_feature_dataset(df, has_label=True) -> pd.DataFrame:
 
 def calc_slope(series):
 
+    if len(series) < 2:
+        return 0
+
     y = series.values
 
     x = np.arange(len(y))
@@ -407,7 +430,23 @@ def calc_slope(series):
 
 
 def calc_level2_slope(series):
+
+    if len(series) < 2:
+        return 0
     return np.polyfit(series.index, series.values, 2)[0]
+
+
+def safe_delta(x, window):
+
+    if len(x) == 0:
+        return 0
+
+    if len(x) >= window:
+        return x.iloc[-1] - x.iloc[-window]
+
+    else:
+        return x.iloc[-1] - x.iloc[0]
+
 
 def build_one_row_features(df, has_label=True) -> pd.DataFrame:
     """
@@ -440,9 +479,40 @@ def build_one_row_features(df, has_label=True) -> pd.DataFrame:
         features[f"{col}_last"] = x.iloc[-1]
 
         # 变化量
+        for w in [30, 60, 120, 300]:
+            features[f"{col}_delta_{w}"] = safe_delta(x, w)
 
-        features[f"{col}_delta"] = x.iloc[-1] - x.iloc[0]
+        for w in [30, 60, 120]:
+            if len(x) >= w:
+                old = x.iloc[-w]
 
+            else:
+                old = x.iloc[0]
+
+            new = x.iloc[-1]
+
+            features[f"{col}_growth_{w}"] = (new - old) / (abs(old) + 1e-6)
+        last60 = x.tail(60)
+
+        if len(x) > 60:
+            history = x.iloc[:-60]
+
+        else:
+            history = x
+
+        features[f"{col}_recent_bias"] = last60.mean() - history.mean()
+
+        recent_std = last60.std()
+
+        history_std = history.std()
+
+        if pd.isna(recent_std):
+            recent_std = 0
+
+        if pd.isna(history_std):
+            history_std = 0
+
+        features[f"{col}_recent_std_ratio"] = recent_std / (history_std + 1e-6)
         # 最近60秒
 
         last60 = x.tail(60)
@@ -455,13 +525,45 @@ def build_one_row_features(df, has_label=True) -> pd.DataFrame:
 
         features[f"{col}_slope"] = calc_slope(x)
         features[f"{col}_slope2"] = calc_level2_slope(x)
+        diff = x.diff()
+
+        features[f"{col}_diff_max"] = diff.max()
+
+        features[f"{col}_diff_mean"] = diff.mean()
+
+        features[f"{col}_diff_std"] = diff.std()
+
+        inc = x.diff() > 0
+
+        features[f"{col}_increase_ratio"] = inc.mean()
+
+        features[f"{col}_last30_increase"] = inc.tail(30).mean()
+
+        features[f"{col}_q90"] = x.quantile(0.9)
+
+        features[f"{col}_q95"] = x.quantile(0.95)
+
+        features[f"{col}_q99"] = x.quantile(0.99)
+
+        for w in [30, 60, 120, 300]:
+            features[f"{col}_slope_{w}"] = calc_slope(x.tail(w))
+
+        for w in [30, 60, 120, 300]:
+            if len(x) >= w:
+                recent = x.tail(w)
+
+                first = recent.head(w // 3).mean()
+
+                last = recent.tail(w // 3).mean()
+
+                features[f"{col}_recent_change_{w}"] = last - first
 
     return pd.DataFrame([features])
 
 
 if __name__ == "__main__":
-    if input("是否根据数据集重新生成正负样本csv文件? (y/n)") == "y":
-        for folder in Path(r"D:\.datasets\oil_data\train").iterdir():
+    if input("是否生成正负样本 csv 文件? 初次运行请输入 y (y/n) ") == "y":
+        for folder in TRAIN_DIR.iterdir():
             if not folder.is_dir():
                 continue
 
@@ -471,8 +573,10 @@ if __name__ == "__main__":
             generate_pos_neg_samples(folder.stem, data, metrics)
 
     df_list = []
-    for f in Path("./dataset/samples_v3").glob("*.csv"):
-        print(f"为 {f.name} 生成特征")
+    print("正在处理所有样本文件")
+    files = list(Path("./dataset/samples_v3").glob("*.csv"))
+    for f in tqdm(files):
+        # print(f"为 {f.name} 生成特征")
         df = pd.read_csv(f)
         df = build_feature_dataset(df)
         df = build_one_row_features(df)

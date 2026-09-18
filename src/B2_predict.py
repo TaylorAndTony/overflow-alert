@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 import joblib
+from tqdm import tqdm
 
 try:
     from src import B0_wash
@@ -33,8 +34,9 @@ OUTPUT = Path("result.csv")
 
 def main():
     string = "切片ID,溢流判断\n"
-    for csv in TEST_DIR.glob("*.csv"):
-        print(f"读取文件：{csv.name}")
+    fs=list(TEST_DIR.glob("*.csv"))
+    for csv in tqdm(fs):
+        # print(f"读取文件：{csv.name}")
         df = pd.read_csv(csv)
 
         df = B0_wash.build_feature_dataset(df, False)
@@ -62,13 +64,13 @@ def main():
 
         prob = model.predict_proba(df)[:, 1]
 
-        threshold = 0.7
+        threshold = 0.5
 
         y_pred = (prob > threshold).astype(int)
 
-        print(type(y_pred))  # <class 'numpy.ndarray'>
+        # print(type(y_pred))  # <class 'numpy.ndarray'>
 
-        print("y_pred:", y_pred)
+        # print("y_pred:", y_pred)
         string += f"{csv.stem},{y_pred[0]}\n"
     with open(OUTPUT, "w", encoding="utf-8") as f:
         f.write(string)

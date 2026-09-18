@@ -101,13 +101,13 @@ Python 3.14
 ### 修改 src/B0_wash.py 里面的：
 
 ```python
-TRAIN_DIR = r"D:\.datasets\oil_data\train"
+TRAIN = r"D:\.datasets\oil_data\train"
 ```
 
 到数据集所在位置，例如：
 
 ```python
-TRAIN_DIR = r"D:\数据集\train"
+TRAIN = r"D:\数据集\train"
 ```
 
 其中 train 文件夹与竞赛下发数据集内的 train 大部分相同，除了做出如下修改：
